@@ -1,17 +1,56 @@
 #include <Wire.h>
 
 // I2C address
-#define MPU_ADDR 0x68 
+#define MPU_ADDR      0x68 
 
 // basic registers
-#define PWR_MGMT_1   0x6B
-#define SMPLRT_DIV   0x19
-#define CONFIG       0x1A
-#define GYRO_CONFIG  0x1B
-#define ACCEL_CONFIG 0x1C
+// basic configs - used to wake sensor (bit 6 set to 1)
+#define PWR_MGMT_1    0x6B
+
+// global sample rate (Sample Rate = Gyroscope Output Rate / (1 + SMPLRT_DIV))
+#define SMPLRT_DIV    0x19
+
+// configures the internal sample rate frequency / latency
+// can set internal freq. to 1KHz or 8KHz
+// trade off - latency X noise
+// DLPF_CFG set to 1-6 put gyro and acell to 1KHz - see 
+// CONFIG can synchronize the capture with external events.
+#define CONFIG        0x1A
+
+// config of self-tests (?)
+// select gyro scales range (2-bit unsigned value - AFS_SEL[4:3])
+// 0 -> ± 250 °/s; 1 => ± 500 °/s; 2 => ± 1000 °/s; 3 => ± 2000 °/s
+#define GYRO_CONFIG   0x1B
+
+// config accelerometer self-tests (?)
+// selects the full scale range of the accelerometer outputs (AFS_SEL[4:3])
+// 0 => ± 2g; 1 => ± 4g; 2 => ± 8g; 3 => ± 16g
+#define ACCEL_CONFIG  0x1C
+
+// contains the 8 most significant bits, ACCEL_XOUT[15:8], of the 16-bit X-Axis accelerometer measurement
+// first byte of a block containing:
+// 0x3B ACCEL_XOUT_H
+// 0x3C ACCEL_XOUT_L
+// 0x3D ACCEL_YOUT_H
+// 0x3E ACCEL_YOUT_L
+// 0x3F ACCEL_ZOUT_H
+// 0x40 ACCEL_ZOUT_L
+// 0x41 TEMP_OUT_H
+// 0x42 TEMP_OUT_L
+// 0x43 GYRO_XOUT_H     (in my case, this data is putted in 0x3B and 0x3C)
+// 0x44 GYRO_XOUT_L
+// 0x45 GYRO_YOUT_H
+// 0x46 GYRO_YOUT_L
+// 0x47 GYRO_ZOUT_H
+// 0x48 GYRO_ZOUT_L
+// each pair (H,L) become a int16_t in two's complement (msb first - big-endian on stream)
+// these blocks are readed in a 14 bytes block to avoid inconsistences
+// 
 #define ACCEL_XOUT_H 0x3B
-#define TEMP_OUT_H   0x41
-#define GYRO_XOUT_H  0x43
+
+// This register is used to verify the identity of the device
+// The default value of the register is 0x68 (not on my case :( )
+// Contains the 6-bit I2C address of the MPU-6050
 #define WHO_AM_I     0x75
 
 #define SDA 21    // ESP pinout config
@@ -19,7 +58,7 @@
 
 // scales based on datasheet
 #define ACCEL_RANGE_SEL 2   // 0=±2g,1=±4g,2=±8g,3=±16g
-#define GYRO_RANGE_SEL  1   // 0=±250°/s,1=±500°/s,2=±1000,3=±2000
+#define GYRO_RANGE_SEL  2   // 0=±250°/s,1=±500°/s,2=±1000,3=±2000 (+ = - sensitivity)
 
 void calibrateOffsets(uint16_t samples);
 
@@ -34,10 +73,10 @@ float accel_lsb_per_g() {
 }
 float gyro_lsb_per_dps() {
   switch (GYRO_RANGE_SEL) {
-    case 0: return 131.0;   // ±250
-    case 1: return 65.5;    // ±500
-    case 2: return 32.8;    // ±1000
-    case 3: return 16.4;    // ±2000
+    case 0: return 131.0;   // +-250
+    case 1: return 65.5;    // +-500
+    case 2: return 32.8;    // +-1000
+    case 3: return 16.4;    // +-2000
   }
   return 131.0;
 }
@@ -56,7 +95,7 @@ void writeReg(uint8_t reg, uint8_t val) {
 uint8_t readReg(uint8_t reg) {
   Wire.beginTransmission(MPU_ADDR);
   Wire.write(reg);
-  Wire.endTransmission(false);
+  Wire.endTransmission(false);  // restart
   Wire.requestFrom(MPU_ADDR, (uint8_t)1);
   if (Wire.available()) return Wire.read();
   return 0xFF;
@@ -78,7 +117,7 @@ void wakeSensor() {
 void configureSensor() {
   // sample rate divider: keep 1k/(1+SMPLRT_DIV) default
   writeReg(SMPLRT_DIV, 0x00);
-  // DLPF - low pass filter: 0x03 ~ 44Hz (ajuste se quiser)
+  // DLPF - low pass filter: 0x03 ~ 44Hz (classic config - better reads)
   writeReg(CONFIG, 0x03);
 
   // set gyro FS_SEL (bits 4:3)
@@ -95,7 +134,7 @@ void setup_mpu6050() {
   Serial.println("Init raw MPU-style driver (ignora WHO_AM_I)");
   wakeSensor();
   configureSensor();
-  calibrateOffsets(500);
+  //calibrateOffsets(500);
 
   // WHO_AM_I register value
   uint8_t who = readReg(WHO_AM_I);
@@ -104,16 +143,28 @@ void setup_mpu6050() {
   Serial.println("Rodae calibrateOffsets() (opcional).");
 }
 
+// float read_gyroscope_x() {
+//   uint8_t buf[14];
+//   readRegs(ACCEL_XOUT_H, 14, buf);
+
+//   int16_t gx = (buf[8] << 8) | buf[9];
+//   long gx_c = (long)gx - gx_off;  // offset opcional
+
+//   float dps = (float)gx_c / gyro_lsb_per_dps();
+
+//   return dps;
+// }
+
 float read_gyroscope_x() {
   uint8_t buf[14];
   readRegs(ACCEL_XOUT_H, 14, buf);
 
-  int16_t ax = (buf[0] << 8) | buf[1];
-  long ax_c = (long)ax - ax_off;
+  int16_t gx = (buf[0] << 8) | buf[1];
+  long gx_c = (long)gx - gx_off;  // offset opcional
 
-  float a_g = (float)ax_c / accel_lsb_per_g();
+  float dps = (float)gx_c / gyro_lsb_per_dps();
 
-  return a_g;
+  return dps;
 }
 
 

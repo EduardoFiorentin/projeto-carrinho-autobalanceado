@@ -1,13 +1,13 @@
 #include "driver/ledc.h"
 #include "esp_err.h"
 
-const int MOTOR_D1 = 25;
-const int MOTOR_D2 = 26;
+const int MOTOR_D1 = 26;
+const int MOTOR_D2 = 25;
 const int MOTOR_E1 = 32;
 const int MOTOR_E2 = 33;
 
 const int freq = 5000;  
-const int resolution = LEDC_TIMER_8_BIT;
+const ledc_timer_bit_t RESOLUTION = LEDC_TIMER_9_BIT;
 
 const ledc_channel_t ledChannelE1 = LEDC_CHANNEL_0;
 const ledc_channel_t ledChannelE2 = LEDC_CHANNEL_1;
@@ -18,7 +18,7 @@ void setup_pwm_system() {
 
   ledc_timer_config_t timer = {
     .speed_mode       = LEDC_LOW_SPEED_MODE,
-    .duty_resolution  = LEDC_TIMER_8_BIT,
+    .duty_resolution  = RESOLUTION,
     .timer_num        = LEDC_TIMER_0,
     .freq_hz          = freq,
     .clk_cfg          = LEDC_AUTO_CLK

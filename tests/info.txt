@@ -1,0 +1,13 @@
+serial1:
+    -- Leitura 1 - Kp=0.7, Ki=0.0, Kd=0.0 - 
+    -- info: gyro_x     pid_out   power
+
+serial2:
+    -- Leitura 1 - Kp=0.7, Ki=0.0, Kd=0.0 - 
+    -- info: gyro_x     pid_out   power
+
+serial3: 
+    -- depois de prender a placa com elastico
+    -- Kp=1.2, Ki=0.0, Kd=0.0 - 
+    tempo de sample do PID aumentado para 100ms
+    
