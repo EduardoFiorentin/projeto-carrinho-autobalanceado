@@ -129,31 +129,19 @@ void configureSensor() {
 
 void setup_mpu6050() {
   Wire.begin(SDA, SCL);
-  Wire.setClock(100000); // 100kHz is safe enough
+  Wire.setClock(100000); // 100kHz 
 
   Serial.println("Init raw MPU-style driver (ignora WHO_AM_I)");
   wakeSensor();
   configureSensor();
-  //calibrateOffsets(500);
+  // calibrateOffsets(500);
 
   // WHO_AM_I register value
   uint8_t who = readReg(WHO_AM_I);
   Serial.print("WHO_AM_I raw: 0x");
   Serial.println(who, HEX);
-  Serial.println("Rodae calibrateOffsets() (opcional).");
 }
 
-// float read_gyroscope_x() {
-//   uint8_t buf[14];
-//   readRegs(ACCEL_XOUT_H, 14, buf);
-
-//   int16_t gx = (buf[8] << 8) | buf[9];
-//   long gx_c = (long)gx - gx_off;  // offset opcional
-
-//   float dps = (float)gx_c / gyro_lsb_per_dps();
-
-//   return dps;
-// }
 
 float read_gyroscope_x() {
   uint8_t buf[14];
@@ -161,35 +149,26 @@ float read_gyroscope_x() {
 
   int16_t gx = (buf[0] << 8) | buf[1];
   long gx_c = (long)gx - gx_off;  // offset opcional
-
   float dps = (float)gx_c / gyro_lsb_per_dps();
 
   return dps;
 }
 
 
-void calibrateOffsets(uint16_t samples = 500) {
-  long sax=0, say=0, saz=0, sgx=0, sgy=0, sgz=0;
+void calibrateOffsets(uint16_t samples) {
+  long sgx=0;
   Serial.println("Calibrating offsets. Keep the module static in 90degs.");
   for (uint16_t i=0;i<samples;i++) {
     uint8_t b[14];
     readRegs(ACCEL_XOUT_H, 14, b);
-    int16_t ax = (b[0] << 8) | b[1];
-    int16_t ay = (b[2] << 8) | b[3];
-    int16_t az = (b[4] << 8) | b[5];
-    int16_t gx = (b[8] << 8) | b[9];
-    int16_t gy = (b[10] << 8) | b[11];
-    int16_t gz = (b[12] << 8) | b[13];
-
-    sax += ax; say += ay; saz += az;
-    sgx += gx; sgy += gy; sgz += gz;
+    int16_t gx = (b[0] << 8) | b[1];
+    sgx += gx; 
     delay(5);
   }
-  ax_off = sax / samples;
-  ay_off = say / samples;
-  az_off = (saz / samples) - (long)accel_lsb_per_g(); // subtrai 1g no z se estiver em repouso
   gx_off = sgx / samples;
-  gy_off = sgy / samples;
-  gz_off = sgz / samples;
-  Serial.println("Calibration complete. Offsets adjusted.");
+  Serial.print("Calibration complete. Offsets adjusted.");
+  Serial.print("gx_off: ");
+  Serial.println(gx_off);
+  delay(3000);
+
 }
