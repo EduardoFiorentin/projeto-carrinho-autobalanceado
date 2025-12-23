@@ -101,12 +101,23 @@ uint8_t readReg(uint8_t reg) {
   return 0xFF;
 }
 
-void readRegs(uint8_t reg, uint8_t count, uint8_t *buf) {
+bool readRegs(uint8_t reg, uint8_t count, uint8_t *buf) {
   Wire.beginTransmission(MPU_ADDR);
   Wire.write(reg);
-  Wire.endTransmission(false);
-  Wire.requestFrom(MPU_ADDR, count);
-  for ( uint8_t i=0; i<count && Wire.available(); i++ ) buf[i] = Wire.read();
+  if (Wire.endTransmission(false) != 0) {
+    return false; // erro no barramento
+  }
+
+  uint8_t received = Wire.requestFrom(MPU_ADDR, count);
+  if (received != count) {
+    return false; // incomplete read (noise, etc)
+  }
+
+  for (uint8_t i = 0; i < count; i++) {
+    buf[i] = Wire.read();
+  }
+
+  return true;
 }
 
 void wakeSensor() {
@@ -145,7 +156,11 @@ void setup_mpu6050() {
 
 float read_gyroscope_x() {
   uint8_t buf[14];
-  readRegs(ACCEL_XOUT_H, 14, buf);
+  
+  if (!readRegs(ACCEL_XOUT_H, 14, buf)) {
+    Serial.println("Error reading register value, retaining last value");
+    return gyro_val;
+  }
 
   int16_t gx = (buf[0] << 8) | buf[1];
   long gx_c = (long)gx - gx_off;  // offset opcional
@@ -169,6 +184,5 @@ void calibrateOffsets(uint16_t samples) {
   Serial.print("Calibration complete. Offsets adjusted.");
   Serial.print("gx_off: ");
   Serial.println(gx_off);
-  delay(3000);
 
 }
