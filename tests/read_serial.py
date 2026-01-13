@@ -5,7 +5,7 @@ import sys
 # Serial config
 SERIAL_PORT =       '/dev/ttyUSB0'          # Port addrs (ex: '/dev/ttyUSB0')
 BAUD_RATE =         115200                  # transmition rate
-OUTPUT_FILE =       'serial3.txt'           # output file name
+OUTPUT_FILE =       'serial8.txt'           # output file name
 
 def read_serial_and_save():
     try:

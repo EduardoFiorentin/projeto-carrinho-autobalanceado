@@ -11,3 +11,60 @@ serial3:
     -- Kp=1.2, Ki=0.0, Kd=0.0 - 
     tempo de sample do PID aumentado para 100ms
     
+serial4:
+    -- depois de aplicar um algoritmo de média móvel ao sistema 
+    -- double Kp=1.25, Ki=0.0, Kd=0.0;
+    -- Sample PID 15 milis
+    -- leitura feita sem motores funcionando (sem ruido dos atuadores, apenas o normal do sensor)
+
+    Testes com filtro de kalman para dados com variação de inclinação
+        Significado dos nomes: serial4_teste_kalman_{INTERVALO_A}_{INTERVALO_B}_{Q}_{R}_{str(EXTIMATIVA_ESTADO_INICIAL)}_{str(EXTIMATIVA_INCERTEZA_INICIAL)}.png
+    
+    Teste "serial4_teste_kalman_0_5000_.png" revela:
+        Bom ajuste do filtro de kalman - melhora em relação à média normal
+        - 1500 e 2500 - Grandes oscilações sem redução drástica do ângulo
+            verificação em: serial4_teste_kalman_1500_2050_0.001_0.27_18_1.0
+                Verificadas grandes oscilações (em escala pequena) - ajuste legal pelo filtro de kalman,
+                mas acho que dá para melhorar AUMENTANDO A DESCONFIANÇA do modelo - ajuste um pouco mais lento
+
+        - 2000 a 3500 - Período de decrescencia no ângulo (sensor foi girado manualmente)
+            teste: serial4_teste_kalman_2250_2550_0.001_0.27_18_1.0.png
+                   serial4_teste_kalman_2500_3500_0.001_0.27_18_1.0.png
+                detectado leve atraso para acompanhar variações mais bruscas da inclinação  
+                
+
+        - 3500 a 5000 - Período de giro manual lento do sensor 
+    
+    
+    
+    Observado que a variação no ângulo foi grande - nova leitura com o robô apenas parado na serial5
+
+
+
+
+
+serial5:
+    -- depois de aplicar um algoritmo de média móvel ao sistema 
+    -- double Kp=1.25, Ki=0.0, Kd=0.0;
+    -- leitura feita sem motores funcionando (sem ruido dos atuadores, apenas o normal do sensor)
+
+    Fazendo uma leitura rápida (10 segundos aprox) com o sensor parado, obtive a medida: 
+        Desvio padrão sem filtros:  0.2697624779908907
+        Variância sem filtros:  0.07277179453178578
+        Desvio padrão com média movel 6 valores:  0.11793096468974656
+        Variância com média movel 6 valores:  0.01390771243265425
+    
+    Implementado filtro de kalman
+        Teste inicial: 
+            Q = 0.001       # Ruído de Processo (confiança no modelo)
+            R = 0.27        # Ruído de Medição (confiança no sensor/dados)
+            x_est = 0       # Estimativa inicial do estado
+            p_est = 1.0     # Incerteza inicial
+
+            Resultado:
+                Desvio padrão sem filtros:  0.2697624779908907
+                Variância sem filtros:  0.07277179453178578
+                Desvio padrão com média movel 6 valores:  0.11793096468974656
+                Variância com média movel 6 valores:  0.01390771243265425
+                Desvio padrão com filtro de kalman:  0.08490218689679224
+                Variância com filtro de kalman:  0.00720838133985784
