@@ -1,6 +1,6 @@
 #include "KalmanFilter.h"
 
-KalmanFilter::KalmanFilter(double* var_in, double* var_out, double q, double r) {
+KalmanFilter::KalmanFilter(double q, double r) {
   // Q - process noise 
   // highter Q  - assumes a volatile "real" state - faster but noiser updates
   // lower Q    - Assumes a stable system - smoother response, but may introduce lag
@@ -9,14 +9,12 @@ KalmanFilter::KalmanFilter(double* var_in, double* var_out, double q, double r) 
   // Measurement noise - describe sthe uncertainty/imprecision of the sensor
   // highter R - tells the filter the sensor is noisy and unreliable - ignore sudden spikes
   R = r;
-  z_n = var_in;       // pointer to input variable (raw sensor reading)
-  x_out = var_out;    // pointer to output variable (filtered state)
   x_est = 0;
   p_est = 2.0;        // covariance of extimation error - starts with a arbitrary value and auto-adjusts
+  Kn = 0.0;
 }
 
-void KalmanFilter::filtre() {
-
+double KalmanFilter::update(double measurement) {
   // prediction step
   // filter tries to predict the uncertainty of the next state 
   // in this model, next state is assumed constant and the uncertainty increases by Q over time
@@ -28,11 +26,21 @@ void KalmanFilter::filtre() {
   
   // update step 
   // corrects the estimated state based on the actual sensor reading and the kalman gain
-  x_est = x_est + Kn * (*z_n - x_est);  // New state value
+  x_est = x_est + Kn * (measurement - x_est);  // New state value
   
   // uncertainty update
   // updates the estimation error covariance for the next iteration
   p_est = (1 - Kn) * p_pred;
-  
-  *x_out = x_est;
+
+  return x_est;
+}
+
+double KalmanFilter::value() const {
+  return x_est;
+}
+
+void KalmanFilter::reset(double initialValue) {
+  x_est = initialValue;
+  p_est = 2.0;
+  Kn = 0.0;
 }
