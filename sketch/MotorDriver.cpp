@@ -15,14 +15,17 @@ namespace {
   constexpr int L298N_ENA = 14;
   constexpr int L298N_ENB = 16;
 
-  // Minimum duty that produces useful torque. These values compensate the
-  // physical dead zone of the L298N + motor set and must be measured per motor.
-  constexpr int RIGHT_MIN_EFFECTIVE_DUTY = 370;
-  constexpr int LEFT_MIN_EFFECTIVE_DUTY = 370;
+  // Minimum duty that produces useful torque for each raw bridge direction.
+  // These values compensate the loaded L298N + motor dead zone.
+  constexpr int RIGHT_POSITIVE_MIN_EFFECTIVE_DUTY = 430;
+  constexpr int RIGHT_NEGATIVE_MIN_EFFECTIVE_DUTY = 440;
+  constexpr int LEFT_POSITIVE_MIN_EFFECTIVE_DUTY = 410;
+  constexpr int LEFT_NEGATIVE_MIN_EFFECTIVE_DUTY = 415;
 
-  // Logical motor direction correction. Flip to -1 if a motor reacts inverted.
+  // Logical motor direction correction. Raw positive was observed to move the
+  // two sides in opposite physical directions, so only one side is inverted.
   constexpr int RIGHT_MOTOR_DIRECTION_SIGN = 1;
-  constexpr int LEFT_MOTOR_DIRECTION_SIGN = 1;
+  constexpr int LEFT_MOTOR_DIRECTION_SIGN = -1;
 
   // ESP32 LEDC PWM configuration shared by both motor enable pins.
   constexpr int PWM_FREQ = 5000;
@@ -35,9 +38,14 @@ namespace {
     int backwardPin;
     int enablePin;
     ledc_channel_t pwmChannel;
-    int minEffectiveDuty;
+    int positiveMinEffectiveDuty;
+    int negativeMinEffectiveDuty;
     int directionSign;
   };
+
+  int signedAppliedDuty(bool rawPositiveDirection, int duty) {
+    return rawPositiveDirection ? duty : -duty;
+  }
 
   // Right motor: IN1/IN2 select direction, ENA receives PWM.
   const MotorPort RIGHT_MOTOR = {
@@ -45,7 +53,8 @@ namespace {
     L298N_IN2,
     L298N_ENA,
     LEDC_CHANNEL_0,
-    RIGHT_MIN_EFFECTIVE_DUTY,
+    RIGHT_POSITIVE_MIN_EFFECTIVE_DUTY,
+    RIGHT_NEGATIVE_MIN_EFFECTIVE_DUTY,
     RIGHT_MOTOR_DIRECTION_SIGN
   };
 
@@ -55,7 +64,8 @@ namespace {
     L298N_IN3,
     L298N_ENB,
     LEDC_CHANNEL_1,
-    LEFT_MIN_EFFECTIVE_DUTY,
+    LEFT_POSITIVE_MIN_EFFECTIVE_DUTY,
+    LEFT_NEGATIVE_MIN_EFFECTIVE_DUTY,
     LEFT_MOTOR_DIRECTION_SIGN
   };
 
@@ -89,22 +99,26 @@ namespace {
     setDuty(motor.pwmChannel, 0);
   }
 
-  void setMotorPower(const MotorPort& motor, int power) {
+  int setMotorPower(const MotorPort& motor, int power, bool rawPositiveDirection) {
     // The public command range is 0..MAX_POWER. Convert it into the hardware
     // duty range while preserving a true zero at command zero.
     power = constrain(power, 0, Config::MAX_POWER);
     if (power == 0) {
       setDuty(motor.pwmChannel, 0);
-      return;
+      return 0;
     }
 
     // Non-zero commands are mapped monotonically from the measured minimum
     // effective duty up to the LEDC maximum duty.
+    int minEffectiveDuty = rawPositiveDirection
+      ? motor.positiveMinEffectiveDuty
+      : motor.negativeMinEffectiveDuty;
     float normalizedPower = static_cast<float>(power) / Config::MAX_POWER;
-    int duty = motor.minEffectiveDuty
-      + static_cast<int>(roundf(normalizedPower * (PWM_MAX_DUTY - motor.minEffectiveDuty)));
-    duty = constrain(duty, motor.minEffectiveDuty, PWM_MAX_DUTY);
+    int duty = minEffectiveDuty
+      + static_cast<int>(roundf(normalizedPower * (PWM_MAX_DUTY - minEffectiveDuty)));
+    duty = constrain(duty, minEffectiveDuty, PWM_MAX_DUTY);
     setDuty(motor.pwmChannel, duty);
+    return signedAppliedDuty(rawPositiveDirection, duty);
   }
 
   void stopMotor(const MotorPort& motor) {
@@ -114,32 +128,33 @@ namespace {
     setDuty(motor.pwmChannel, 0);
   }
 
-  void driveMotorForward(const MotorPort& motor, int power) {
+  int driveMotorForward(const MotorPort& motor, int power) {
     // L298N direction: one input high, the opposite input low.
     digitalWrite(motor.forwardPin, HIGH);
     digitalWrite(motor.backwardPin, LOW);
-    setMotorPower(motor, power);
+    return setMotorPower(motor, power, true);
   }
 
-  void driveMotorBackward(const MotorPort& motor, int power) {
+  int driveMotorBackward(const MotorPort& motor, int power) {
     // Reverse direction by swapping which bridge input is driven high.
     digitalWrite(motor.forwardPin, LOW);
     digitalWrite(motor.backwardPin, HIGH);
-    setMotorPower(motor, power);
+    return setMotorPower(motor, power, false);
   }
 
-  void driveSignedMotor(const MotorPort& motor, int command) {
+  int driveSignedMotor(const MotorPort& motor, int command) {
     // Apply the per-motor logical inversion in exactly one place.
     int adjustedCommand = command * motor.directionSign;
 
     // Positive and negative signed commands select direction; magnitude selects
     // requested power after dead-zone compensation.
     if (adjustedCommand > 0) {
-      driveMotorForward(motor, adjustedCommand);
+      return driveMotorForward(motor, adjustedCommand);
     } else if (adjustedCommand < 0) {
-      driveMotorBackward(motor, -adjustedCommand);
+      return driveMotorBackward(motor, -adjustedCommand);
     } else {
       stopMotor(motor);
+      return 0;
     }
   }
 }
@@ -164,6 +179,8 @@ void MotorDriver::stop() {
   // Stop both sides symmetrically.
   stopMotor(RIGHT_MOTOR);
   stopMotor(LEFT_MOTOR);
+  rightLastAppliedDuty = 0;
+  leftLastAppliedDuty = 0;
 }
 
 void MotorDriver::apply(double command) {
@@ -179,39 +196,50 @@ void MotorDriver::apply(double command) {
     // them to zero.
     int power = constrain(static_cast<int>(ceil(magnitude)), 1, Config::MAX_POWER);
     int signedPower = command >= 0.0 ? power : -power;
-    driveSignedMotor(RIGHT_MOTOR, signedPower);
-    driveSignedMotor(LEFT_MOTOR, signedPower);
+    rightLastAppliedDuty = driveSignedMotor(RIGHT_MOTOR, signedPower);
+    leftLastAppliedDuty = driveSignedMotor(LEFT_MOTOR, signedPower);
   }
 }
 
 void MotorDriver::driveForward(int power) {
   // Diagnostic helper for manually checking that both wheels move forward.
   power = constrain(power, 0, Config::MAX_POWER);
-  driveSignedMotor(RIGHT_MOTOR, power);
-  driveSignedMotor(LEFT_MOTOR, power);
+  rightLastAppliedDuty = driveSignedMotor(RIGHT_MOTOR, power);
+  leftLastAppliedDuty = driveSignedMotor(LEFT_MOTOR, power);
 }
 
 void MotorDriver::driveBackward(int power) {
   // Diagnostic helper for manually checking reverse direction.
   power = constrain(power, 0, Config::MAX_POWER);
-  driveSignedMotor(RIGHT_MOTOR, -power);
-  driveSignedMotor(LEFT_MOTOR, -power);
+  rightLastAppliedDuty = driveSignedMotor(RIGHT_MOTOR, -power);
+  leftLastAppliedDuty = driveSignedMotor(LEFT_MOTOR, -power);
 }
 
+int MotorDriver::rightAppliedDuty() const {
+  return rightLastAppliedDuty;
+}
 
+int MotorDriver::leftAppliedDuty() const {
+  return leftLastAppliedDuty;
+}
+
+// testing setup
 void MotorDriver::testRightRaw(int duty) {
-  duty = constrain(duty, -511, 511);
+  duty = constrain(duty, -PWM_MAX_DUTY, PWM_MAX_DUTY);
 
   if (duty > 0) {
       digitalWrite(RIGHT_MOTOR.forwardPin, HIGH);
       digitalWrite(RIGHT_MOTOR.backwardPin, LOW);
       setDuty(RIGHT_MOTOR.pwmChannel, duty);
+      rightLastAppliedDuty = duty;
   } else if (duty < 0) {
       digitalWrite(RIGHT_MOTOR.forwardPin, LOW);
       digitalWrite(RIGHT_MOTOR.backwardPin, HIGH);
       setDuty(RIGHT_MOTOR.pwmChannel, -duty);
+      rightLastAppliedDuty = duty;
   } else {
       stopMotor(RIGHT_MOTOR);
+      rightLastAppliedDuty = 0;
   }
 }
 
@@ -222,11 +250,14 @@ void MotorDriver::testLeftRaw(int duty) {
     digitalWrite(LEFT_MOTOR.forwardPin, HIGH);
     digitalWrite(LEFT_MOTOR.backwardPin, LOW);
     setDuty(LEFT_MOTOR.pwmChannel, duty);
+    leftLastAppliedDuty = duty;
   } else if (duty < 0) {
     digitalWrite(LEFT_MOTOR.forwardPin, LOW);
     digitalWrite(LEFT_MOTOR.backwardPin, HIGH);
     setDuty(LEFT_MOTOR.pwmChannel, -duty);
+    leftLastAppliedDuty = duty;
   } else {
     stopMotor(LEFT_MOTOR);
+    leftLastAppliedDuty = 0;
   }
 }

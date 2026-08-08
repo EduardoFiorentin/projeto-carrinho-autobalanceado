@@ -51,18 +51,25 @@ class SelfBalancingRobot {
     // Stop all actuation after exceeding the safe angle envelope.
     void enterFallen(float estimatedAngle);
 
-    // Emit temporary low-rate axis diagnostics for physical MPU orientation tests.
+    // Handle temporary motor diagnostic commands from Serial Monitor.
+    void handleSerialDiagnostics();
+    void processDiagnosticCommand(char *commandLine);
+
+    // Convert the state enum into compact telemetry text.
+    const char *stateName() const;
+
+    // Emit low-rate control telemetry for bench diagnostics.
     void printTelemetry(
       uint32_t timestamp,
+      const char *stateText,
       float accelAngle,
-      float gyroRate,
       float estimatedAngle,
-      float accelX,
-      float accelY,
-      float accelZ,
-      float gyroX,
-      float gyroY,
-      float gyroZ
+      float angleError,
+      float gyroRate,
+      double pidOutput,
+      double motorCommand,
+      int rightAppliedDuty,
+      int leftAppliedDuty
     );
 
     // Hardware and control collaborators.
@@ -74,6 +81,10 @@ class SelfBalancingRobot {
     // Scheduler timestamps in microseconds. Unsigned subtraction tolerates rollover.
     uint32_t lastUpdateUs = 0;
     uint32_t lastTelemetryUs = 0;
+    char diagnosticCommandBuffer[32] = {};
+    uint8_t diagnosticCommandLength = 0;
+    bool diagnosticMotorMode = false;
+    bool diagnosticStopRequested = false;
 
     RobotState state = RobotState::CALIBRATING;
 };

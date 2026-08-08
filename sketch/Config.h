@@ -28,8 +28,17 @@ namespace Config {
   // Small command deadband around zero. Keep this separate from motor PWM minimums.
   constexpr double CONTROL_DEADBAND = 0.0;
 
-  // Start with motors disabled so angle estimation can be validated safely.
-  constexpr bool MOTOR_OUTPUT_ENABLED = false;
+  // Enable normal motor output after ARM/FALLEN/deadband protections are in place.
+  constexpr bool MOTOR_OUTPUT_ENABLED = true;
+
+  // Global closed-loop polarity. Flip this only if feedback is physically positive.
+  constexpr int CONTROL_OUTPUT_SIGN = 1;
+
+  // Robot only arms when close enough to the configured setpoint.
+  constexpr float ARM_ANGLE_TOLERANCE_DEG = 5.0f;
+
+  // Temporary actuation deadband around the setpoint to avoid high-PWM chatter.
+  constexpr float ANGLE_CONTROL_DEADBAND_DEG = 1.0f;
 
   // Initial PID gains for angle control. Do not tune aggressively before sensor validation.
   constexpr double PID_KP = 0.8;

@@ -25,9 +25,17 @@ class MotorDriver {
     void driveForward(int power);
     void driveBackward(int power);
 
+    // Signed raw duty actually applied after direction and minimum-duty mapping.
+    int rightAppliedDuty() const;
+    int leftAppliedDuty() const;
+
     // test methods
     void testRightRaw(int duty);
     void testLeftRaw(int duty);
+
+  private:
+    int rightLastAppliedDuty = 0;
+    int leftLastAppliedDuty = 0;
 };
 
 #endif
