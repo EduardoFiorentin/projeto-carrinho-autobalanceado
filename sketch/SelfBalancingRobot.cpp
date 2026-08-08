@@ -71,8 +71,15 @@ void SelfBalancingRobot::update() {
     return;
   }
 
-  // The sensor owns physical orientation details. The robot only consumes the
-  // balance angle reference and matching gyro rate.
+  // Read all converted axes for temporary physical-orientation diagnostics.
+  float accelX = sensor.accelX();
+  float accelY = sensor.accelY();
+  float accelZ = sensor.accelZ();
+  float gyroX = sensor.gyroX();
+  float gyroY = sensor.gyroY();
+  float gyroZ = sensor.gyroZ();
+
+  // The balance path is intentionally unchanged during this diagnostic step.
   float accelAngle = sensor.accelAngle();
   float gyroRate = sensor.balanceGyroRate();
 
@@ -88,7 +95,7 @@ void SelfBalancingRobot::update() {
     enterFallen(estimatedAngle);
     if (nowUs - lastTelemetryUs >= Config::TELEMETRY_PERIOD_US) {
       lastTelemetryUs = nowUs;
-      printTelemetry(nowUs, accelAngle, gyroRate, estimatedAngle, 0.0, 0.0);
+      printTelemetry(nowUs, accelAngle, gyroRate, estimatedAngle, accelX, accelY, accelZ, gyroX, gyroY, gyroZ);
     }
     return;
   }
@@ -118,7 +125,7 @@ void SelfBalancingRobot::update() {
   // does not determine controller timing.
   if (nowUs - lastTelemetryUs >= Config::TELEMETRY_PERIOD_US) {
     lastTelemetryUs = nowUs;
-    printTelemetry(nowUs, accelAngle, gyroRate, estimatedAngle, controlOutput, motorCommand);
+    printTelemetry(nowUs, accelAngle, gyroRate, estimatedAngle, accelX, accelY, accelZ, gyroX, gyroY, gyroZ);
   }
 }
 
@@ -144,20 +151,27 @@ void SelfBalancingRobot::printTelemetry(
   float accelAngle,
   float gyroRate,
   float estimatedAngle,
-  double controlOutput,
-  double motorCommand
+  float accelX,
+  float accelY,
+  float accelZ,
+  float gyroX,
+  float gyroY,
+  float gyroZ
 ) {
   // Format:
   // timestamp_us, accelAngle_deg, gyroRate_dps, estimatedAngle_deg,
-  // setpoint_deg, controlOutput, motorCommand
+  // accelX_g, accelY_g, accelZ_g, gyroX_dps, gyroY_dps, gyroZ_dps
   Serial.printf(
-    "%lu\t%.3f\t%.3f\t%.3f\t%.3f\t%.3f\t%.3f\n",
+    "%lu\t%.3f\t%.3f\t%.3f\t%.4f\t%.4f\t%.4f\t%.3f\t%.3f\t%.3f\n",
     static_cast<unsigned long>(timestamp),
     accelAngle,
     gyroRate,
     estimatedAngle,
-    controller.setpoint(),
-    controlOutput,
-    motorCommand
+    accelX,
+    accelY,
+    accelZ,
+    gyroX,
+    gyroY,
+    gyroZ
   );
 }

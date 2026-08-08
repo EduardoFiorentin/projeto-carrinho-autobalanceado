@@ -24,6 +24,10 @@ class MotorDriver {
     // Manual diagnostic helpers that still respect per-motor direction signs.
     void driveForward(int power);
     void driveBackward(int power);
+
+    // test methods
+    void testRightRaw(int duty);
+    void testLeftRaw(int duty);
 };
 
 #endif

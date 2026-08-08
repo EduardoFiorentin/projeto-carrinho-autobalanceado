@@ -26,8 +26,10 @@ class Mpu6050Sensor {
     // Balance angle from gravity, in degrees, using the configured physical axis.
     float accelAngle() const;
 
-    // Raw selected gyro axis in degrees per second, after bias calibration.
+    // Gyroscope values in degrees per second, after per-axis bias calibration.
     float gyroX() const;
+    float gyroY() const;
+    float gyroZ() const;
 
     // Gyro rate used by the balance estimator, with centralized sign correction.
     float balanceGyroRate() const;
@@ -49,14 +51,18 @@ class Mpu6050Sensor {
     float accelLsbPerG() const;
     float gyroLsbPerDps() const;
 
-    // Gyro bias in raw LSB units, subtracted before converting to deg/s.
+    // Gyro biases in raw LSB units, subtracted before converting to deg/s.
     long gyroXOffset = 0;
+    long gyroYOffset = 0;
+    long gyroZOffset = 0;
 
     // Last valid scaled readings. They are only updated after a successful frame read.
     float lastAccelX = 0.0f;
     float lastAccelY = 0.0f;
     float lastAccelZ = 0.0f;
     float lastGyroX = 0.0f;
+    float lastGyroY = 0.0f;
+    float lastGyroZ = 0.0f;
 };
 
 #endif

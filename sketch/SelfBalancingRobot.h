@@ -51,14 +51,18 @@ class SelfBalancingRobot {
     // Stop all actuation after exceeding the safe angle envelope.
     void enterFallen(float estimatedAngle);
 
-    // Emit low-rate tab-separated data for Serial Plotter or external logging.
+    // Emit temporary low-rate axis diagnostics for physical MPU orientation tests.
     void printTelemetry(
       uint32_t timestamp,
       float accelAngle,
       float gyroRate,
       float estimatedAngle,
-      double controlOutput,
-      double motorCommand
+      float accelX,
+      float accelY,
+      float accelZ,
+      float gyroX,
+      float gyroY,
+      float gyroZ
     );
 
     // Hardware and control collaborators.

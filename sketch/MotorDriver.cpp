@@ -197,3 +197,36 @@ void MotorDriver::driveBackward(int power) {
   driveSignedMotor(RIGHT_MOTOR, -power);
   driveSignedMotor(LEFT_MOTOR, -power);
 }
+
+
+void MotorDriver::testRightRaw(int duty) {
+  duty = constrain(duty, -511, 511);
+
+  if (duty > 0) {
+      digitalWrite(RIGHT_MOTOR.forwardPin, HIGH);
+      digitalWrite(RIGHT_MOTOR.backwardPin, LOW);
+      setDuty(RIGHT_MOTOR.pwmChannel, duty);
+  } else if (duty < 0) {
+      digitalWrite(RIGHT_MOTOR.forwardPin, LOW);
+      digitalWrite(RIGHT_MOTOR.backwardPin, HIGH);
+      setDuty(RIGHT_MOTOR.pwmChannel, -duty);
+  } else {
+      stopMotor(RIGHT_MOTOR);
+  }
+}
+
+void MotorDriver::testLeftRaw(int duty) {
+  duty = constrain(duty, -PWM_MAX_DUTY, PWM_MAX_DUTY);
+
+  if (duty > 0) {
+    digitalWrite(LEFT_MOTOR.forwardPin, HIGH);
+    digitalWrite(LEFT_MOTOR.backwardPin, LOW);
+    setDuty(LEFT_MOTOR.pwmChannel, duty);
+  } else if (duty < 0) {
+    digitalWrite(LEFT_MOTOR.forwardPin, LOW);
+    digitalWrite(LEFT_MOTOR.backwardPin, HIGH);
+    setDuty(LEFT_MOTOR.pwmChannel, -duty);
+  } else {
+    stopMotor(LEFT_MOTOR);
+  }
+}

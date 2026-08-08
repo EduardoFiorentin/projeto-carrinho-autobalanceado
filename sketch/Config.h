@@ -63,11 +63,11 @@ namespace Config {
   constexpr uint8_t ACCEL_RANGE_SEL = 2;
   constexpr uint8_t GYRO_RANGE_SEL = 2;
 
-  // Physical mounting sign corrections for the selected balance axis.
-  constexpr float BALANCE_ACCEL_Y_SIGN = 1.0f;
+  // Physical mounting sign corrections for balance around the MPU6050 Y axis.
+  constexpr float BALANCE_ACCEL_X_SIGN = 1.0f;
   constexpr float BALANCE_ACCEL_Z_SIGN = 1.0f;
   constexpr float BALANCE_ACCEL_ANGLE_SIGN = 1.0f;
-  constexpr float BALANCE_GYRO_RATE_SIGN = 1.0f;
+  constexpr float BALANCE_GYRO_Y_SIGN = -1.0f;
 }
 
 #endif

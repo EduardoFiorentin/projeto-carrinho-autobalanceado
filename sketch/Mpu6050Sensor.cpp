@@ -27,6 +27,10 @@ namespace {
   constexpr uint8_t ACCEL_Z_LOW_INDEX = 5;
   constexpr uint8_t GYRO_X_HIGH_INDEX = 8;
   constexpr uint8_t GYRO_X_LOW_INDEX = 9;
+  constexpr uint8_t GYRO_Y_HIGH_INDEX = 10;
+  constexpr uint8_t GYRO_Y_LOW_INDEX = 11;
+  constexpr uint8_t GYRO_Z_HIGH_INDEX = 12;
+  constexpr uint8_t GYRO_Z_LOW_INDEX = 13;
   constexpr float RADIANS_TO_DEGREES = 57.2957795f;
 
   // MPU6050 sends high byte first; combine as signed two's-complement int16.
@@ -72,6 +76,8 @@ bool Mpu6050Sensor::read() {
   int16_t ay = readInt16(buf, ACCEL_Y_HIGH_INDEX, ACCEL_Y_LOW_INDEX);
   int16_t az = readInt16(buf, ACCEL_Z_HIGH_INDEX, ACCEL_Z_LOW_INDEX);
   int16_t gx = readInt16(buf, GYRO_X_HIGH_INDEX, GYRO_X_LOW_INDEX);
+  int16_t gy = readInt16(buf, GYRO_Y_HIGH_INDEX, GYRO_Y_LOW_INDEX);
+  int16_t gz = readInt16(buf, GYRO_Z_HIGH_INDEX, GYRO_Z_LOW_INDEX);
 
   // Convert raw accelerometer LSBs into g using the configured full-scale range.
   float accelScale = accelLsbPerG();
@@ -79,9 +85,14 @@ bool Mpu6050Sensor::read() {
   lastAccelY = static_cast<float>(ay) / accelScale;
   lastAccelZ = static_cast<float>(az) / accelScale;
 
-  // Remove the calibrated gyro bias before converting to degrees per second.
+  // Remove each calibrated gyro bias before converting to degrees per second.
+  float gyroScale = gyroLsbPerDps();
   long correctedGyroX = static_cast<long>(gx) - gyroXOffset;
-  lastGyroX = static_cast<float>(correctedGyroX) / gyroLsbPerDps();
+  long correctedGyroY = static_cast<long>(gy) - gyroYOffset;
+  long correctedGyroZ = static_cast<long>(gz) - gyroZOffset;
+  lastGyroX = static_cast<float>(correctedGyroX) / gyroScale;
+  lastGyroY = static_cast<float>(correctedGyroY) / gyroScale;
+  lastGyroZ = static_cast<float>(correctedGyroZ) / gyroScale;
 
   return true;
 }
@@ -99,20 +110,28 @@ float Mpu6050Sensor::accelZ() const {
 }
 
 float Mpu6050Sensor::accelAngle() const {
-  // For rotation around X, gravity projected on Y/Z gives the absolute tilt.
+  // For rotation around Y, gravity projected on X/Z gives the absolute tilt.
   // All physical sign decisions are centralized in Config.
-  float y = Config::BALANCE_ACCEL_Y_SIGN * lastAccelY;
+  float x = Config::BALANCE_ACCEL_X_SIGN * lastAccelX;
   float z = Config::BALANCE_ACCEL_Z_SIGN * lastAccelZ;
-  return Config::BALANCE_ACCEL_ANGLE_SIGN * atan2f(y, z) * RADIANS_TO_DEGREES;
+  return Config::BALANCE_ACCEL_ANGLE_SIGN * atan2f(x, z) * RADIANS_TO_DEGREES;
 }
 
 float Mpu6050Sensor::gyroX() const {
   return lastGyroX;
 }
 
+float Mpu6050Sensor::gyroY() const {
+  return lastGyroY;
+}
+
+float Mpu6050Sensor::gyroZ() const {
+  return lastGyroZ;
+}
+
 float Mpu6050Sensor::balanceGyroRate() const {
   // Keep sign inversion in one place so the control loop never needs ad-hoc -1.
-  return Config::BALANCE_GYRO_RATE_SIGN * lastGyroX;
+  return Config::BALANCE_GYRO_Y_SIGN * lastGyroY;
 }
 
 bool Mpu6050Sensor::calibrate(uint16_t samples) {
@@ -122,6 +141,8 @@ bool Mpu6050Sensor::calibrate(uint16_t samples) {
   }
 
   long sumGyroX = 0;
+  long sumGyroY = 0;
+  long sumGyroZ = 0;
   uint16_t validSamples = 0;
   Serial.println("Calibrating offsets. Keep the module static in 90degs.");
 
@@ -131,7 +152,11 @@ bool Mpu6050Sensor::calibrate(uint16_t samples) {
     uint8_t buf[SENSOR_FRAME_BYTES];
     if (readRegs(ACCEL_XOUT_H, SENSOR_FRAME_BYTES, buf)) {
       int16_t gx = readInt16(buf, GYRO_X_HIGH_INDEX, GYRO_X_LOW_INDEX);
+      int16_t gy = readInt16(buf, GYRO_Y_HIGH_INDEX, GYRO_Y_LOW_INDEX);
+      int16_t gz = readInt16(buf, GYRO_Z_HIGH_INDEX, GYRO_Z_LOW_INDEX);
       sumGyroX += gx;
+      sumGyroY += gy;
+      sumGyroZ += gz;
       validSamples++;
     }
     delay(5);
@@ -143,11 +168,19 @@ bool Mpu6050Sensor::calibrate(uint16_t samples) {
     return false;
   }
 
-  // Store offset in raw units so runtime conversion keeps one clear scale path.
+  // Store offsets in raw units so runtime conversion keeps one clear scale path.
   gyroXOffset = sumGyroX / validSamples;
-  Serial.print("Calibration complete. Offsets adjusted. gx_off: ");
+  gyroYOffset = sumGyroY / validSamples;
+  gyroZOffset = sumGyroZ / validSamples;
+
+  Serial.println("Gyro calibration complete");
+  Serial.print("gx_off: ");
   Serial.println(gyroXOffset);
-  Serial.print("Valid calibration samples: ");
+  Serial.print("gy_off: ");
+  Serial.println(gyroYOffset);
+  Serial.print("gz_off: ");
+  Serial.println(gyroZOffset);
+  Serial.print("valid samples: ");
   Serial.println(validSamples);
 
   return true;
